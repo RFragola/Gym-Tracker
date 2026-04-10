@@ -6,7 +6,7 @@ from datetime import datetime, date
 import plotly.express as px
 
 st.set_page_config(page_title="Gym Tracker", layout="wide")
-st.title("🏋️ Gym Tracker")
+st.title("Gym Tracker")
 
 # ---------- Data Persistence ----------
 LOG_FILE = "workout_log.json"
@@ -64,46 +64,78 @@ with tab1:
             st.success("Schedule saved!")
             st.rerun()
 
-
 # ══════════════════════════════════════════
 # TAB 2 – Log a Workout
 # ══════════════════════════════════════════
 with tab2:
     st.header("Log a Workout")
-    st.write("Record your sets, reps, and weight for any exercise.")
+    st.write("Record each set individually with its own reps and weight.")
 
-    with st.form("log_form"):
-        col1, col2 = st.columns(2)
+    # Initialize session state for sets
+    if "sets_data" not in st.session_state:
+        st.session_state.sets_data = [{"reps": 10, "weight": 135.0}]
 
-        with col1:
-            log_date  = st.date_input("📆 Date", value=date.today())
-            exercise  = st.text_input("🏋️ Exercise name", placeholder="e.g. Bench Press")
-            sets      = st.number_input("Sets", min_value=1, max_value=20, value=3, step=1)
+    col1, col2 = st.columns(2)
+    with col1:
+        log_date = st.date_input("📆 Date", value=date.today())
+    with col2:
+        exercise = st.text_input("🏋️ Exercise name", placeholder="e.g. Bench Press")
 
-        with col2:
-            reps      = st.number_input("Reps per set", min_value=1, max_value=100, value=10, step=1)
-            weight    = st.number_input("Weight (lbs)", min_value=0.0, max_value=2000.0,
-                                        value=135.0, step=2.5)
-            notes     = st.text_area("Notes (optional)", placeholder="How did it feel?")
+    st.subheader("Sets")
+    st.write("Enter the reps and weight for each set:")
 
-        submitted = st.form_submit_button("➕ Log Set")
+    # Render a row for each set
+    for i, s in enumerate(st.session_state.sets_data):
+        c1, c2, c3 = st.columns([3, 3, 1])
+        with c1:
+            st.session_state.sets_data[i]["reps"] = st.number_input(
+                f"Set {i+1} — Reps", min_value=1, max_value=100,
+                value=s["reps"], step=1, key=f"reps_{i}"
+            )
+        with c2:
+            st.session_state.sets_data[i]["weight"] = st.number_input(
+                f"Set {i+1} — Weight (lbs)", min_value=0.0, max_value=2000.0,
+                value=s["weight"], step=2.5, key=f"weight_{i}"
+            )
+        with c3:
+            # Spacer to align the button with the inputs
+            st.write("")
+            st.write("")
+            if len(st.session_state.sets_data) > 1:
+                if st.button("🗑️", key=f"del_{i}", help="Remove this set"):
+                    st.session_state.sets_data.pop(i)
+                    st.rerun()
 
-    if submitted:
+    # Add / remove set buttons
+    col_add, col_clear = st.columns([1, 5])
+    with col_add:
+        if st.button("➕ Add Set"):
+            last = st.session_state.sets_data[-1]
+            st.session_state.sets_data.append({"reps": last["reps"], "weight": last["weight"]})
+            st.rerun()
+
+    notes = st.text_area("Notes (optional)", placeholder="How did it feel?")
+
+    if st.button("💾 Log Workout", type="primary"):
         if not exercise.strip():
             st.error("Please enter an exercise name.")
         else:
             date_key = str(log_date)
-            entry = {
-                "exercise": exercise.strip().title(),
-                "sets": sets,
-                "reps": reps,
-                "weight": weight,
-                "volume": sets * reps * weight,
-                "notes": notes.strip(),
-            }
-            workout_log.setdefault(date_key, []).append(entry)
+            for i, s in enumerate(st.session_state.sets_data):
+                entry = {
+                    "exercise": exercise.strip().title(),
+                    "set_number": i + 1,
+                    "reps": s["reps"],
+                    "weight": s["weight"],
+                    "volume": s["reps"] * s["weight"],
+                    "notes": notes.strip() if i == 0 else "",
+                }
+                workout_log.setdefault(date_key, []).append(entry)
             save_json(LOG_FILE, workout_log)
-            st.success(f"✅ Logged: **{entry['exercise']}** — {sets}×{reps} @ {weight} lbs")
+            st.success(f"✅ Logged **{exercise.strip().title()}** — {len(st.session_state.sets_data)} sets")
+            # Reset sets for next exercise
+            st.session_state.sets_data = [{"reps": 10, "weight": 135.0}]
+            st.rerun()
 
     # Recent log preview
     st.divider()
@@ -114,12 +146,11 @@ with tab2:
         for e in entries
     ]
     if all_entries:
-        df = pd.DataFrame(all_entries).sort_values("date", ascending=False)
-        st.dataframe(df[["date", "exercise", "sets", "reps", "weight", "volume", "notes"]],
+        df = pd.DataFrame(all_entries).sort_values(["date", "exercise", "set_number"], ascending=True)
+        st.dataframe(df[["date", "exercise", "set_number", "reps", "weight", "volume", "notes"]],
                      use_container_width=True, hide_index=True)
     else:
         st.info("No workouts logged yet.")
-
 
 # ══════════════════════════════════════════
 # TAB 3 – Progress Charts
