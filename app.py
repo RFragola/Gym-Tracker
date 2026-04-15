@@ -37,7 +37,7 @@ tab1, tab2, tab3 = st.tabs(["📅 Today's Workout", "📝 Log Workout", "📈 Pr
 with tab1:
     st.header("Today's Workout")
     today_name = date.today().strftime("%A")
-    st.subheader(f"Today is **{today_name}**")
+    st.subheader(f"**{today_name}**")
 
     today_exercises = schedule.get(today_name, [])
     if today_exercises:
